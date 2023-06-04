@@ -1,5 +1,7 @@
 #include <EEPROM.h>
-#include <CN0349.h>
+#include "CN0349.h"
+
+//#define EEPROM_SIZE 48
 
 CN0349 CT;  //initialize CT sensor
 
@@ -77,15 +79,70 @@ void calibrateCN0349(char state) { //find, and save gain factors, and offsets. S
   Serial.println(F("Calibration Done"));
 }
 
-void setup() {
-  Serial.begin(115200);
-  // put your setup code here, to run once:
-  CT.configureAD5934(15, 8 * pow(10, 3), 4, 2);     // number of settling times ,start frequency (Hz),frequency increment (Hz), number of increments
-  delay(5);
-  calibrateCN0349('H');
+float sample() {
+
+  double sum = 0;
+  float magnitude;
+  uint8_t count = 0;
+  uint8_t err = 0;
+
+  do {
+    err = CT.sweep_read_data(&magnitude, NULL);
+
+    if (!err) {
+      //Serial.printf("magnitude: %f\n", magnitude);
+      sum += magnitude;
+      count++;
+      CT.sweep_step();
+    }
+  } while(err != 2);
+
+  return (float) (sum/count);
+  //Serial.printf("magnitude: %f\n", sum/count);
 }
 
+void setup() {
+  Serial.begin(115200);
+
+  //float startFreq = 8 * pow(10, 3);
+  float startFreq = 1000;
+  CT.configureAD5934(15, startFreq, 0, 5);     // number of settling times ,start frequency (Hz),frequency increment (Hz), number of increments
+  delay(5);
+  //calibrateCN0349('L');
+
+
+  Serial.printf("0x82: %02x / %02x\n", CT.AD5934byteRead(0x82), CT.frequencyCode(startFreq, 0));
+  Serial.printf("0x83: %02x / %02x\n", CT.AD5934byteRead(0x83), CT.frequencyCode(startFreq, 1));
+  Serial.printf("0x84: %02x / %02x\n", CT.AD5934byteRead(0x84), CT.frequencyCode(startFreq, 2));
+
+  uint8_t modes[] = {
+	  R9|R3,
+	  R8|R3,
+	  R9|R4,
+	  R8|R4,
+	  R9|R7,
+	  R8|R7,
+	  R9|RTD,
+	  R8|RTD,
+	  R9|YCELL,
+	  R8|YCELL,
+  };
+  
+  for(uint8_t i=0; sizeof(modes)/sizeof(uint8_t); i++) {
+	  
+	  uint8_t mode = modes[i];
+	  
+	  CT.setSwitches(mode);
+	  CT.sweep_init();
+	  Serial.printf("mode %d,\tmagnitude: %f\n", mode, sample());
+  }
+  CT.sweep_close();
+  
+}
+
+
 void loop() {
+  return;
   float YL, YH, NH, NL, GF_low, NOS_low, GF_high, NOS_high = 0;
   float Y_cell, T_cell, YT_cell, T_imp, imp = -1;
   //Just please make sure calibrateCN0349 is called at least once in the programs lifetime before the following line!
@@ -94,5 +151,7 @@ void loop() {
   uint8_t CT_error = CT.measure(GF_high, GF_high, NOS_high, 'H', &T_imp, &imp, &Y_cell, &T_cell);
   Serial.print(F("Admittance:\t\t"));
   Serial.println(Y_cell, 3);
+  Serial.print("Temperature : ");
+  Serial.println(T_cell, 3);
   
 }

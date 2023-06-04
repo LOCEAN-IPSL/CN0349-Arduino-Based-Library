@@ -16,11 +16,20 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 */
 
 #include <Wire.h>// used for I2C communication
-#include "avr/pgmspace.h"
+#include <Arduino.h>
+
+#ifdef avr
+#include "avr/pgmspace.h" 
+#include <util/delay.h>
+#endif
+#if defined(ESP32)
+#include <pgmspace.h>
+#endif
+
 #include "CN0349.h"
 #include <stdlib.h>
 #include <inttypes.h>
-#include <util/delay.h>
+
 
 void CN0349::configureAD5934(uint8_t settlingTimes, float startFreq, float freqIncr, uint8_t numIncr) {
   Wire.begin();
@@ -170,11 +179,11 @@ float CN0349::sweep(uint8_t switch1, uint8_t switch2) { //performs frequency swe
   //_delay_ms(100);
   ////////////////////////////////////////////////4. poll status register until complete
   //while (checkStatus() < 6) {
-  while (checkStatus() < 4) {
+  while (! (checkStatus() & STATUS_REGISTER_SWEEPDONE)) { // loop until the sweep is done
    //for (int i = 0; i < 10; i++) {
     //print(checkStatus());
     //_delay_ms(80);
-    if (checkStatus() == validImpedanceData) {
+    if (checkStatus() & STATUS_REGISTER_VALIDDATA) {
       // 5. read values
       real = AD5934byteRead(REAL_DATA_REGISTER[0]) << 8;
       real |= AD5934byteRead(REAL_DATA_REGISTER[1]);
@@ -199,6 +208,65 @@ float CN0349::sweep(uint8_t switch1, uint8_t switch2) { //performs frequency swe
   }
   setControlRegister(POWER_DOWN);
   return magnitude;
+}
+
+void CN0349::setSwitches(uint8_t reg) {
+	
+}
+
+void CN0349::sweep_init() {
+	//setControlRegister2();
+	
+	/*
+	ADG715reset();            //clear out switches
+	ADG715writeChannel(switch1, 1); //turn on switchs
+	ADG715writeChannel(switch2, 1);
+	*/
+
+	setControlRegister2(); //0.Inizialize bit D11,D10,D9,D8
+	setControlRegister(STANDBY); //1. place AD5934 in standby mode
+	setControlRegister(INITIALIZE); //2. initialize with start frequency
+	_delay_ms(100);
+	
+	setControlRegister(START_SWEEP);
+}
+
+
+
+uint8_t CN0349::sweep_read_data(float* magnitude, float* phase) {
+	uint16_t status = checkStatus();
+	int real = 0;
+	int imag = 0;
+	
+	if (status & STATUS_REGISTER_SWEEPDONE)
+		return 2;
+	
+	if (status & STATUS_REGISTER_VALIDDATA) {
+		
+		real = AD5934byteRead(REAL_DATA_REGISTER[0]) << 8;
+		real |= AD5934byteRead(REAL_DATA_REGISTER[1]);
+
+		imag = AD5934byteRead(IMAG_DATA_REGISTER[0]) << 8;
+		imag |= AD5934byteRead(IMAG_DATA_REGISTER[1]);
+
+		if(magnitude)
+			*magnitude = sqrt(pow(double(real), 2) + pow(double(imag), 2));
+		
+		if(phase)
+			*phase = atan(double(imag) / double(real)); // if you ever need it
+		
+		return 0;
+	}
+	else
+		return 1;
+}
+
+void CN0349::sweep_step() {
+	setControlRegister(INCREMENT);
+}
+
+void CN0349::sweep_close() {
+	setControlRegister(POWER_DOWN);
 }
 
 float CN0349::calibrate(double rcal, double rfb) {

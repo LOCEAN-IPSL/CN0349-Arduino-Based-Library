@@ -4,13 +4,21 @@
 #define CN0349_h
 
 #include <Wire.h>// used for I2C communication
-#include "avr/pgmspace.h"
+#ifdef avr
+#include "avr/pgmspace.h"   
+#include <util/delay.h>
+#endif
+#if defined(ESP32)
+#include <pgmspace.h>
+#define _delay_ms(ms) delayMicroseconds((ms) * 1000)
+#endif
+
 #define AD5934_ADDR 0x0D   //i2c addresses of CN-0349
 #define ADG715_ADDR 0x48
 #include <EEPROM.h> 
 #include <stdlib.h>
 #include <inttypes.h>
-#include <util/delay.h>
+
 #include <math.h>
 
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -22,12 +30,18 @@ const uint8_t PROGMEM validImpedanceData = 2;   //when the data is good
 const uint8_t PROGMEM validSweep = 4;   // when the sweep is over
 //const float alpha = 0.021; // 2.1%°C is the temperature coefficient at 25°C for sea water
 //Resistors:
-const float PROGMEM R2 = 100;
-const float PROGMEM R3 = 100;
-const float PROGMEM R4 = 1000;
-const float PROGMEM R7 = 10000;
-const float PROGMEM R8 = 1000;
-const float PROGMEM R9 = 100;
+
+const uint8_t PROGMEM R9 = 1<<0; // 100 ohms
+const uint8_t PROGMEM R8 = 1<<1; // 1000 ohms
+const uint8_t PROGMEM R6 = 1<<2; // DNP
+
+const uint8_t PROGMEM R3 = 1<<3; // 100 ohms
+const uint8_t PROGMEM R4 = 1<<4; // 1000 ohms
+const uint8_t PROGMEM R7 = 1<<5; // 1000 ohms
+
+const uint8_t PROGMEM RTD = 1<<6; // 1000 ohms
+const uint8_t PROGMEM YCELL = 1<<7; // 1000 ohms
+
 const uint8_t PROGMEM GF_low_addr =1;
 const uint8_t PROGMEM NOS_low_addr=4;
 const uint8_t PROGMEM GF_high_addr=6;
@@ -111,6 +125,9 @@ const uint8_t PROGMEM STANDBY       =  0b1011; // VOUT and VIN are connected int
 //0100 0000 Reserved
 //1000 0000 Reserved
 
+#define STATUS_REGISTER_VALIDDATA (1<<1)
+#define STATUS_REGISTER_SWEEPDONE (1<<2)
+
 ///////////////////////////////////////////////////////////////////////////////////////////
 //ADG715 switches of CN-0349
 ///////////////////////////////////////////////////////////////////////////////////////////
@@ -133,11 +150,18 @@ class CN0349{
 		void configureAD5934(uint8_t settlingTimes, float startFreq, float freqIncr, uint8_t numIncr);
 		float calibrate(double rcal, double rfb);
 		uint8_t measure(float GF_rtd, float GF, double NOS, char state, float* T_imp, float* rawimp, float* Y_cell, float* T_cell);
+		uint16_t AD5934byteRead(uint8_t address);
+		uint8_t frequencyCode(float freqInHz, uint8_t byteNum);
+
+		void setSwitches(uint8_t reg);
+		void sweep_init();
+		uint8_t sweep_read_data(float* magnitude, float* phase);
+		void sweep_step();
+		void sweep_close();
+		
 	private:
 	    uint16_t checkStatus();
 		bool AD5934byteWrite(uint8_t address, uint8_t data);
-		uint16_t AD5934byteRead(uint8_t address);
-		uint8_t frequencyCode(float freqInHz, uint8_t byteNum);
 		bool setStartFrequency(float freqInHz);
 		bool setFrequencyIncrement(float freqInHz);
 		bool setNumberOfIncrements(uint8_t n);
