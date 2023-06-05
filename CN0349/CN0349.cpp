@@ -32,8 +32,6 @@ USE OR OTHER DEALINGS IN THE SOFTWARE.
 
 
 void CN0349::configureAD5934(uint8_t settlingTimes, float startFreq, float freqIncr, uint8_t numIncr) {
-  Wire.begin();
-  _delay_ms(1000);
   setNumberOfSettlingTimes(settlingTimes);
   setStartFrequency(startFreq);
   setFrequencyIncrement(freqIncr);
@@ -144,7 +142,7 @@ bool CN0349::setControlRegister(uint8_t code) {
 bool CN0349::setControlRegister2() { //initalize D11 D10 D9 D8 @0x80 Excitation Voltage 2.0Vp-p, Internal PGA=1
   uint8_t rxByte = AD5934byteRead(CONTROL_REGISTER[0]);
   rxByte &= 0xF0; // clear lower four bits (11110000)
-  rxByte |= 0b00000001; // set to 0001 Excitation Voltage 2.0Vp-p, Internal PGA=1
+  rxByte |= REG_CONTROL0 | REG_CONTROL0_1V | REG_CONTROL0_PGA_X1;
   bool s = AD5934byteWrite(CONTROL_REGISTER[0], rxByte);
   _delay_ms(10);
   return s;
@@ -211,7 +209,9 @@ float CN0349::sweep(uint8_t switch1, uint8_t switch2) { //performs frequency swe
 }
 
 void CN0349::setSwitches(uint8_t reg) {
-	
+	Wire.beginTransmission(ADG715_ADDR);
+	Wire.write(reg);
+	Wire.endTransmission();
 }
 
 void CN0349::sweep_init() {
@@ -235,11 +235,9 @@ void CN0349::sweep_init() {
 
 uint8_t CN0349::sweep_read_data(float* magnitude, float* phase) {
 	uint16_t status = checkStatus();
-	int real = 0;
-	int imag = 0;
+	int16_t real = 0;
+	int16_t imag = 0;
 	
-	if (status & STATUS_REGISTER_SWEEPDONE)
-		return 2;
 	
 	if (status & STATUS_REGISTER_VALIDDATA) {
 		
@@ -255,10 +253,10 @@ uint8_t CN0349::sweep_read_data(float* magnitude, float* phase) {
 		if(phase)
 			*phase = atan(double(imag) / double(real)); // if you ever need it
 		
-		return 0;
+		return (status & STATUS_REGISTER_SWEEPDONE) ? 2 : 0;
 	}
-	else
-		return 1;
+	
+	return (status & STATUS_REGISTER_SWEEPDONE) ? 2 : 1;
 }
 
 void CN0349::sweep_step() {

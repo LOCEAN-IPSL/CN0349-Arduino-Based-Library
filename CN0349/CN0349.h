@@ -31,6 +31,9 @@ const uint8_t PROGMEM validSweep = 4;   // when the sweep is over
 //const float alpha = 0.021; // 2.1%°C is the temperature coefficient at 25°C for sea water
 //Resistors:
 
+
+const uint8_t PROGMEM R2 = 100;
+
 const uint8_t PROGMEM R9 = 1<<0; // 100 ohms
 const uint8_t PROGMEM R8 = 1<<1; // 1000 ohms
 const uint8_t PROGMEM R6 = 1<<2; // DNP
@@ -87,6 +90,27 @@ const uint8_t PROGMEM STANDBY       =  0b1011; // VOUT and VIN are connected int
 // D2 = reserved, set to 0
 // D1 = reserved, set to 0
 // D0 = reserved, set to 0
+
+#define REG_CONTROL0			0b00001000 // D3 "Reserved; set to 1" ???
+
+#define REG_CONTROL0_PGA_X1		0b0001
+#define REG_CONTROL0_PGA_X5		0b0000
+
+#define REG_CONTROL0_2V			0b0000
+#define REG_CONTROL0_200mV		0b0010
+#define REG_CONTROL0_400mV		0b0100
+#define REG_CONTROL0_1V			0b0110
+
+#define REG_CONTROL0_INIT		(0b0001 << 4)
+#define REG_CONTROL0_STARTSWEEP	(0b0010 << 4)
+#define REG_CONTROL0_INCREMENT	(0b0011 << 4)
+#define REG_CONTROL0_REPEAT		(0b0100 << 4)
+#define REG_CONTROL0_PWRDOWN	(0b1010 << 4)
+#define REG_CONTROL0_STANDBY	(0b1011 << 4)
+
+
+#define REG_CONTROL1_RESET		(1 << 4)
+
 
 ///////////////////////////////////////////////////////////////////////////////////////////
 //Start Frequency Register Code @ 0x82, 0x83, 0x84 of CN-0349
@@ -151,6 +175,7 @@ class CN0349{
 		float calibrate(double rcal, double rfb);
 		uint8_t measure(float GF_rtd, float GF, double NOS, char state, float* T_imp, float* rawimp, float* Y_cell, float* T_cell);
 		uint16_t AD5934byteRead(uint8_t address);
+		bool AD5934byteWrite(uint8_t address, uint8_t data);
 		uint8_t frequencyCode(float freqInHz, uint8_t byteNum);
 
 		void setSwitches(uint8_t reg);
@@ -161,7 +186,6 @@ class CN0349{
 		
 	private:
 	    uint16_t checkStatus();
-		bool AD5934byteWrite(uint8_t address, uint8_t data);
 		bool setStartFrequency(float freqInHz);
 		bool setFrequencyIncrement(float freqInHz);
 		bool setNumberOfIncrements(uint8_t n);
