@@ -148,72 +148,6 @@ bool CN0349::setControlRegister2() { //initalize D11 D10 D9 D8 @0x80 Excitation 
   return s;
 }
 
-float CN0349::sweep(uint8_t switch1, uint8_t switch2) { //performs frequency sweep for real and unreal components, returns the magnitude
-  float magnitude;
-  //configureAD5934(15, 8 * pow(10, 3), 4, 2);    // number of settling times ,start frequency (Hz),frequency increment (Hz), number of increments
-  //configureAD5934(2, 1 * pow(10, 5),4,0 );
-  //configureAD5934(2, 1 * pow(10, 3), 1 * pow(10, 4),0 );
-  //configureAD5934(2, 1 * pow(10, 3), 1 * pow(10, 3),100 );
-  //_delay_ms(10);
-  setControlRegister2();
- //_delay_ms(10);
-  ADG715reset();            //clear out switches
-  //_delay_ms(10);
-  ADG715writeChannel(switch1, 1); //turn on switchs
-  //_delay_ms(10);
-  ADG715writeChannel(switch2, 1);
-  //_delay_ms(10);
-  int real = 0;
-  int imag = 0;
-  ////////////////////////////////////////////////0.Inizialize bit D11,D10,D9,D8
-  setControlRegister2();
-  ////////////////////////////////////////////////1. place AD5934 in standby mode
-  setControlRegister(STANDBY);
-  ////////////////////////////////////////////////2. initialize with start frequency
-  setControlRegister(INITIALIZE);
-  _delay_ms(100);
-  ////////////////////////////////////////////////3. start frequency sweep
-  setControlRegister(START_SWEEP);
-  //_delay_ms(100);
-  ////////////////////////////////////////////////4. poll status register until complete
-  //while (checkStatus() < 6) {
-  while (! (checkStatus() & STATUS_REGISTER_SWEEPDONE)) { // loop until the sweep is done
-   //for (int i = 0; i < 10; i++) {
-    //print(checkStatus());
-    //_delay_ms(80);
-    if (checkStatus() & STATUS_REGISTER_VALIDDATA) {
-      // 5. read values
-      real = AD5934byteRead(REAL_DATA_REGISTER[0]) << 8;
-      real |= AD5934byteRead(REAL_DATA_REGISTER[1]);
-
-     // if (real > 0x7FFF) { // negative value
-     //   real &= 0x7FFF;
-     //   real -= 0x10000;
-     // }
-      imag = AD5934byteRead(IMAG_DATA_REGISTER[0]) << 8;
-      imag |= AD5934byteRead(IMAG_DATA_REGISTER[1]);
-     // if (imag > 0x7FFF) { // negative value
-     //   imag &= 0x7FFF;
-     //   imag -= 0x10000;
-     // }
-      magnitude = sqrt(pow(double(real), 2) + pow(double(imag), 2));
-	    double phase = atan(double(imag) / double(real)); // if you ever need it
-      setControlRegister(INCREMENT);
-	  //setControlRegister(REPEAT_FREQ);
-    }
-  //}
- // _delay_ms(80);
-  }
-  setControlRegister(POWER_DOWN);
-  return magnitude;
-}
-
-void CN0349::setSwitches(uint8_t reg) {
-	Wire.beginTransmission(ADG715_ADDR);
-	Wire.write(reg);
-	Wire.endTransmission();
-}
-
 void CN0349::sweep_init() {
 	//setControlRegister2();
 	
@@ -267,145 +201,15 @@ void CN0349::sweep_close() {
 	setControlRegister(POWER_DOWN);
 }
 
-float CN0349::calibrate(double rcal, double rfb) {
-  float magnitude;
-  int switch1, switch2 = 0;
-
-  //reference:
-  //      Rcal(ohms) | Rfb(ohms)  |Channelscalibrate
-  //RTD:   R3(100)     R9(100)      4,1
-  //High1: R3(100)     R9(100)      4,1
-  //High2: R4(1000)    R9(100)      5,1
-  //Low1:  R4(1000)    R8(1000)     5,2
-  //Low2:  R7(10000)   R8(1000)     6,2
-
-  if (rcal == 100 && rfb == 100) { //rtd and 1st high calibration, r3, r9
-    switch1 = 4;
-    switch2 = 1;
-  }
-  else if (rcal == 1000 && rfb == 100) { //2nd high calibration r4, r9
-    switch1 = 5;
-    switch2 = 1;
-  }
-  else if (rcal == 1000 && rfb == 1000) { //1st low calibration r4, r8
-    switch1 = 5;
-    switch2 = 2;
-  }
-  else if (rcal == 10000 && rfb == 1000) { //1st low calibration r7, r8
-    switch1 = 6;
-    switch2 = 2;
-  }
-  else {
-    rfb = 0;
-    rcal = 0;
-  }
-  if (!(rfb && rcal == 0)) {
-    magnitude = sweep(switch1, switch2);
-  }
-  else {
-    magnitude = 0;
-  }
-  return magnitude;
-};
-
-uint8_t CN0349::measure(float GF_rtd, float GF, double NOS, char state, float* T_imp, float* rawimp, float* Y_cell, float* T_cell) {  //high or low measurment ranges
-  const float A = 3.9083 * pow(10, -3);
-  const float B = -5.775 * pow(10, -7);
-  float magnitude = 0;
-  int switch1, switch2 = 0;
-  int flag = 1;
-  float NX, YX = 0;
-  //reference
-  //      Rfb(ohms)  |Channels
-  //RTD:   R9(100)       1,7
-  //High:  R9(100)       1,8
-  //Low:   R8(1000)      2,8
-
-  //rtd measurement rfb = r9 also path to thermistor
-  switch1 = 1;  //measure rtd first
-  switch2 = 7;
-  magnitude = sweep(switch1, switch2);    //measure temperature
-  *T_imp = 1 / (magnitude * GF_rtd);
-  *T_cell = (-A + sqrt(pow(A, 2) - 4 * B * (1 - *T_imp / 100))) / (2 * B); //convert impedence to temperature (known pt100 formula)
-  //Rt = R0 * (1 + A* t + B*t2 + C*(t-100)* t3)
-
-  if (state == 'H') { //high measurement rfb = r9
-    switch1 = 1;
-    switch2 = 8;
-  }
-  else if (state == 'L') { //low measurement rfb=r8
-    switch1 = 2;
-    switch2 = 8;
-  }
-  else {
-    flag = 0;
-	return 0;
-  }
-  if (!(flag = 0)) {
-    magnitude = sweep(switch1, switch2);      //get conductance magnitude
-    //Serial.println(magnitude, 30);
-  }
-  else {
-    magnitude = 0;
-  }
-  // three point calibration equation
-  //YX = (NX-NOS)*GF
-  //YCELL = YX / (1 - 100 * YX);
-  *rawimp = 1 / (magnitude * GF);
-  NX = magnitude;
-  YX = (NX - NOS) * GF;
-  if (state == 'H') { //high measurement rfb = r9
-      *Y_cell = YX / (1 - R2 * YX) * 1000; //1/ohms, go to mS
-   // *Y_cell = YX / (1 - R2 * YX) ; //1/ohms, go from S to mS
-
-  }
-  else {
-    *Y_cell = YX * 1000;  //go to S/m
-    //*Y_cell = YX;  //go from S/m to mS/cm
-
-  }
-  
-  return 1;
-};
-
-
 ///////////////////////////////////////////////////////////////////////////////////////////
 /////////ADG715
 ///////////////////////////////////////////////////////////////////////////////////////////
-uint8_t CN0349::ADG715CH(uint8_t channel) {   //checks channel numbers
-  channel -= 1; //assume input is 1-8 -> 0-7
-  if (channel < 0)
-    channel = 0;
-  else if (channel > 7)
-    channel = 7;
-  return channel;
-};
-
-//return status as a byte of all channel (1-8)
-uint8_t CN0349::ADG715read(uint8_t channel) {  //if channel exceeds 9, read all
-  uint8_t value = 255; //error possibly?
-  Wire.requestFrom(ADG715_ADDR, 0x01); //request one byte from address
-  while (Wire.available())
-    value = Wire.read(); //grab one byte
-  if (channel < 9) //1-8
-  {
-    channel = ADG715CH(channel); //resize to 0-7
-    value = (((value) >> (channel)) & 0x01);
-  }
-  return value; //return all
-};
-
-void CN0349::ADG715writeChannel(uint8_t channel, uint8_t state) { //change status of a specified channel (1-8)
-  uint8_t value;
-  value = ADG715read(9); //read all channels
-  state ? ((value) |= (1UL << (ADG715CH(channel)))) : ((value) &= ~(1UL << (ADG715CH(channel))));
-  Wire.beginTransmission(ADG715_ADDR);
-  Wire.write(value);
-  Wire.endTransmission();
-};
+void CN0349::ADG715set(uint8_t reg) {
+	Wire.beginTransmission(ADG715_ADDR);
+	Wire.write(reg);
+	Wire.endTransmission();
+}
 
 void CN0349::ADG715reset() { //clear out register
-  Wire.beginTransmission(ADG715_ADDR);
-  Wire.write(0x00); //clear out register
-  Wire.endTransmission();
+	ADG715set(0x0);
 };

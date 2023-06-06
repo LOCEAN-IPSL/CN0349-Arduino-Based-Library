@@ -171,14 +171,13 @@ const uint8_t PROGMEM STANDBY       =  0b1011; // VOUT and VIN are connected int
 
 class CN0349{
 	public:
-		void configureAD5934(uint8_t settlingTimes, float startFreq, float freqIncr, uint8_t numIncr);
-		float calibrate(double rcal, double rfb);
-		uint8_t measure(float GF_rtd, float GF, double NOS, char state, float* T_imp, float* rawimp, float* Y_cell, float* T_cell);
 		uint16_t AD5934byteRead(uint8_t address);
 		bool AD5934byteWrite(uint8_t address, uint8_t data);
+		
+		void configureAD5934(uint8_t settlingTimes, float startFreq, float freqIncr, uint8_t numIncr);
 		uint8_t frequencyCode(float freqInHz, uint8_t byteNum);
 
-		void setSwitches(uint8_t reg);
+		void ADG715set(uint8_t reg);
 		void sweep_init();
 		uint8_t sweep_read_data(float* magnitude, float* phase);
 		void sweep_step();
@@ -191,12 +190,7 @@ class CN0349{
 		bool setNumberOfIncrements(uint8_t n);
 		bool setNumberOfSettlingTimes(uint8_t n);
 		bool setControlRegister(uint8_t code);
-		bool setControlRegister2(); //initalize D11 D10 D9 D8 @0x80 Excitation Voltage 2.0Vp-p, Internal PGA=1
-		float sweep(uint8_t switch1, uint8_t switch2); //performs frequency sweep for real and unreal components, returns the magnitude
-		float tempcondtosal(float cond, float temp); //convert microsiemens to salinity, valid for 2 to 42 ppt
-		uint8_t ADG715CH(uint8_t channel);   //checks channel numbers
-		uint8_t ADG715read(uint8_t channel);  //if channel exceeds 9, read all
-		void ADG715writeChannel(uint8_t channel, uint8_t state); //change status of a specified channel (1-8)
-		void ADG715reset(); //clear out register
+		bool setControlRegister2();
+		void ADG715reset();
 		};
 #endif
