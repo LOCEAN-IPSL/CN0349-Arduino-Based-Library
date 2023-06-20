@@ -50,23 +50,23 @@ typedef struct {
 #define MODE_INIT(X) { .name = #X, .reg = X }
 
 MODE modes[] = {
+  MODE_INIT(R9|R3),
   MODE_INIT(R9|R4),
-  MODE_INIT(R8|R3),
-  MODE_INIT(R9|R4|R3),
+  MODE_INIT(R9|R4|R7),
+  
+  MODE_INIT(R8|R4),
+  MODE_INIT(R8|R7),
+  MODE_INIT(R8|R4|R7),
+  
+  MODE_INIT(R8|RTD),
+  MODE_INIT(R9|YCELL),
+  MODE_INIT(R8|YCELL),
+  
   MODE_INIT(R9|R3),
   MODE_INIT(R8|R4),
-  MODE_INIT(R9|R8|R3),
-//  MODE_INIT(R8|R3),
-//  MODE_INIT(R8|R4),
-//  MODE_INIT(R9|R7),
-//  MODE_INIT(R8|R7),
-  MODE_INIT(R9|R6),
-  MODE_INIT(R9|RTD),
-//  MODE_INIT(R8|RTD),
-  MODE_INIT(R9|YCELL),
-//  MODE_INIT(R8|YCELL),
-  MODE_INIT(R8|YCELL),
 };
+
+float startFreq = 1000;
 
 void setup() {
   Serial.begin(115200);
@@ -78,27 +78,28 @@ void setup() {
   Serial.printf("0x80: %02x\n", CT.AD5934byteRead(0x80));
   Serial.printf("0x81: %02x\n", CT.AD5934byteRead(0x81));
 
-  float startFreq = 1000;
   CT.configureAD5934(50, startFreq, 0, 5);     // number of settling times ,start frequency (Hz),frequency increment (Hz), number of increments
-  
-  delay(1);
+
+  Serial.printf("freq\t");
+  for(uint8_t i=0; i<sizeof(modes)/sizeof(MODE); i++) {
+    Serial.printf("%s\t", modes[i].name);
+  }
+  Serial.printf("\n");
 }
 
 
 void loop() {
+  
+  // TODO: read current frequency from AD5934 
+  Serial.printf("%.0f\t", startFreq); 
   for(uint8_t i=0; i<sizeof(modes)/sizeof(MODE); i++) {
-    
-    MODE mode = modes[i];
-    
-    CT.ADG715set(mode.reg);
+    CT.ADG715set(modes[i].reg);
     CT.sweep_init();
-    Serial.printf("mode %s,\tmagnitude: %d\n", mode.name, (uint16_t)sample());
+    Serial.printf("%d\t",(uint16_t)sample());
   }
   CT.sweep_close();
 
   Serial.printf("\n");
   
-  delay(1);
-  
-  return;
+  _delay_ms(10000);
 }
